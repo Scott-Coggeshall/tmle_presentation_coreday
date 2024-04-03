@@ -1,0 +1,535 @@
+---
+title: "Targeted Maximum Likelihood Estimation for Robust Causal Inference"
+subtitle: "`r emo::ji('bullseye')`"
+author: "Scott Coggeshall"
+institute: "Seattle COIN"
+date: "April 3rd, 2024"
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+
+
+```{r setup, include=FALSE, warning = FALSE}
+options(htmltools.dir.version = FALSE)
+
+
+
+xaringanExtra::use_tachyons()
+
+library(xaringanthemer)
+
+style_mono_light(base_color = "#23395b")
+
+```
+
+---
+## Introduction
+
+--
+
+#### Targeted maximum likelihood estimation (TMLE) - What is it?
+
+--
+
+&nbsp;&nbsp;&nbsp;&nbsp; -an alternative to standard statistical modeling
+
+--
+
+&nbsp;&nbsp;&nbsp;&nbsp; -a way to get robust estimates of causal effects using machine learning (ML)
+
+--
+
+&nbsp;&nbsp;&nbsp;&nbsp; - some crazy stats wizardry
+
+--
+
+#### What this talk is
+--
+
+- a starting point for a deeper dive into TMLE methodology
+
+--
+
+- a chance to see how to apply machine learning in your statistical analyses
+
+--
+
+#### What this talk is NOT
+
+--
+
+- an in-depth look into the math behind TMLE or ML
+
+--
+
+- a rant about how things MUST be done
+
+
+---
+class:  center, middle
+
+## Mark van der Laan, TMLE guru
+![](mark_van_der_laan.jpeg)
+
+
+--
+
+##.b.i[Really] dislikes current statistical practice
+
+---
+
+## Current statistical practice
+
+--
+
+- Check what type of outcome we have
+
+--
+
+ - Continuous? Fit a linear regression.
+ 
+--
+
+ - Binary? Fit a logistic regression.
+ 
+--
+
+ - Survival? Fit a Cox regression.
+
+--
+
+- Focus on whatever effects can be estimated from that model
+
+--
+
+ - Linear regression? mean difference
+ 
+--
+
+ - Logistic regression? Odds ratio!
+ 
+--
+ 
+ - Cox regression? Hazard ratio (whatever that actually is...)
+
+
+--
+ 
+- Confounders?
+
+--
+
+ - Adjust using main effects terms
+ 
+--
+
+ - MAYBE an interaction or two
+--
+
+---
+## Current statistical practice
+
+Lots of parametric modeling with main effects 
+
+--
+
+$$
+\begin{align*}
+E[Y \mid X, W ] &= \beta_0 + \beta_1 X + \beta_2 W + ...
+\end{align*}
+$$
+
+--
+
+$$
+\begin{align*}
+logit(P(Y | X, W, ...)) &= \alpha_0 + \alpha_1 x + \alpha_2 W + ...
+\end{align*}
+$$
+
+--
+
+What's wrong with this?
+
+--
+
+### .red.b.tt-l[MODEL MISSPECIFICATION!]
+
+--
+
+Parametric models are "small" - highly likely to be wrong
+
+--
+
+`r emo::ji("x")` Missing interactions
+
+--
+
+`r emo::ji("x")` Missing non-linearities
+
+
+---
+class:inverse, center, middle
+
+![](images.jpeg)
+
+> "All models are wrong, but some are useful" 
+>      
+> \- George E.P. Box
+
+---
+![](mark_van_der_laan2.jpeg.png)
+
+
+
+---
+
+--
+![](simple_dag-1.png)
+
+--
+
+"Wrong but useful" might apply here
+
+--
+
+```{r out.width = "45%", echo = FALSE}
+
+knitr::include_graphics("complicated_dag.jpeg")
+```
+
+--
+
+Less likely to apply here
+---
+# If we can't fit parametric models...
+--
+what are we supposed to do instead?
+
+--
+
+![](mark_van_der_laan3.jpeg.png)
+
+---
+## Statistical Practice *Reformed*
+
+*Start* by specifying the statistical/causal parameter of interest
+
+--
+
+Identify the components of the data generating process (DGP) needed to estimate that parameter
+
+--
+
+Estimate those components and the parameter of interest using minimal *realistic* assumptions about the DGP
+
+--
+
+Machine learning algorithms could work for this...
+
+--
+
+...but they don't come with statistical guarantees
+
+--
+
+### This is where .b.red[TMLE] comes in!
+
+
+
+
+---
+## TMLE in Broad Strokes
+
+--
+
+Step 1. Start with a causal parameter of interest (call it $\Psi$) defined *without* reference to any parametric statistical model
+
+--
+
+Step 2. Identify the portion of the DGP necessary to identify the causal parameter of interest (call this $Q$)
+
+--
+
+Step 3. Obtain an initial estimate of $Q$ (call it $\hat{Q}$) using a large statistical model likely to contain the true DGP
+
+
+--
+
+Step 4. Update $\hat{Q}$ in a way that's *targeted* towards getting an optimal estimate of $\Psi$
+
+--
+
+Step 5. Calculate point estimates, confidence intervals, and p-values based on asymptotic normality
+---
+## TMLE Example - Estimating a Mean Difference
+
+--
+
+Step 1. *Counterfactual* mean difference $E[Y(1)] - E[Y(0)]$
+
+--
+
+Step 2. The *conditional* mean
+
+$$
+\begin{align*}
+E[Y | A, W]
+\end{align*}
+$$
+
+
+
+---
+## TMLE Example - Estimating a Mean Difference
+
+
+Step 1. *Counterfactual* mean difference $E[Y(1)] - E[Y(0)]$
+
+
+Step 2. The *conditional* mean
+
+$$
+\begin{align*}
+\underbrace{E[Y | A, W]}_{\text{Hit this with machine learning}}
+\end{align*}
+$$
+--
+
+Step 3. Estimate $\hat{E}[Y | A, W]$ of $E[Y | A, W]$ using the SuperLearner
+
+
+--
+
+Step 4. Update 
+
+$$
+\begin{align*}
+\hat{E}[Y | A, W] \rightarrow\tilde{E}[Y | A, W]
+\end{align*}
+$$
+
+
+
+---
+## TMLE Example - Estimating a Mean Difference
+
+
+Step 1. *Counterfactual* mean difference $E[Y(1)] - E[Y(0)]$
+
+
+Step 2. The *conditional* mean
+
+$$
+\begin{align*}
+\underbrace{E[Y | A, W]}_{\text{Hit this with machine learning}}
+\end{align*}
+$$
+
+Step 3. Estimate $\hat{E}[Y | A, W]$ of $E[Y | A, W]$ using the SuperLearner
+
+Step 4. Update 
+
+$$
+\begin{align*}
+\underbrace{\hat{E}[Y | A, W] \rightarrow\tilde{E}[Y | A, W]}_{\text{This is where the TMLE magic happens}}
+\end{align*}
+$$
+
+
+---
+## TMLE Example - Estimating a Mean Difference
+
+Step 4. Update 
+
+$$
+\begin{align*}
+\underbrace{\hat{E}[Y | A, W] \rightarrow\tilde{E}[Y | A, W]}_{\text{This is where the TMLE magic happens}}
+\end{align*}
+$$
+
+--
+
+Calculate estimated counterfactual mean as 
+
+$$
+\frac{1}{n} \sum_{i = 1}^n \tilde{E}[Y_i | A = 1, W_i] - \tilde{E}[Y_i | A = 0, W_i]
+$$
+--
+
+Step 5. Calculate confidence intervals, p-values etc using efficient influence function (more TMLE magic), or bootstrap
+
+---
+## SuperLearner - Putting the ML into TMLE
+
+--
+
+*Which* ML algorithm should we use?
+
+--
+
+```{r out.width = '80%', echo = FALSE}
+knitr::include_graphics("ml_word_cloud.png")
+```
+
+
+---
+## SuperLearner - Putting the ML into TMLE
+
+--
+
+Ensemble learning, aka the SuperLearner, has an elegant solution:
+
+--
+
+![](bring-me-everyone-gary-oldman.gif)
+
+
+--
+
+Fit multiple ML algorithms 
+
+--
+
+Use cross-validation to sort them out
+
+--
+
+Pick the best one, or take a weighted average of them all
+---
+## TMLE - a simulated example
+
+--
+
+Suppose we have data $(Y, A, W_1, W_2, W_3, W_4)$ from an observational study
+
+--
+
+$W_1, W_2$ - binary confounders
+
+$W_3, W_4$ - continuous confounder
+
+--
+
+$A$ - **confounded** exposure indicator
+
+--
+
+$$
+\begin{align*}
+P(A | W_1, W_2, W_3) &= logit^{-1}(-0.2 + 1.2 * W_2 + log(W_3) + 0.3 * W_1 \times W_4) 
+\end{align*}
+$$
+
+--
+
+$Y$ - continuous outcome based on mean model
+
+$$
+\begin{align*}
+E[Y | A, W_1, W_2, W_3, W_4] &= 1 + A + W_1 + W_2 + \\
+&\qquad A \times W_1 + A \times W_2^2 + A \times W_3 \times W_2
+\end{align*}
+$$
+---
+## TMLE - a simulated example
+
+
+--
+
+Generate 1000 datasets of size $n = 1000$ based on this DGP
+
+--
+
+For each dataset, estimate the effect of the exposure $A$ in terms of mean difference in outcome $Y$, adjusting for confounders $\boldsymbol{W}$
+
+--
+
+Two methods:
+
+--
+
+- Main effects linear regression 
+
+--
+
+- $E[Y | A, W] = \beta_0 + \beta_1 A + \beta_2 W_1 + \beta_3 W_2 + \beta_4 W_3 + \beta_5 W_4$
+
+--
+
+- TMLE with SuperLearner
+  - Random forest, multivariate adaptive regression splines, LASSO
+
+
+
+
+
+---
+.white[Main effects linear regression is biased...]
+.white[...but TMLE with SuperLearner does much better]
+
+![](base_plot.png)
+---
+.blue[Main effects linear regression] is biased...
+.white[...but TMLE with SuperLearner does much better]
+
+![](linear_regression_only_plot.png)
+---
+.blue[Main effects linear regression] is biased...
+but .gold[TMLE with SuperLearner] does much better
+
+![](combined_plot.png)
+
+
+---
+# Wrapping Up
+
+--
+
+TMLE offers a robust alternative to standard approaches to regression modeling
+
+--
+
+Leverages machine learning, but comes with statistical guarantees
+
+--
+
+Computationally intensive compared to parametric models
+
+--
+
+May not make a difference in some datasets
+
+
+---
+
+
+
+# Additional Resources
+
+## Summer Institutes - UW Biostat
+(https://si.biostat.washington.edu/institutes/siscer)
+
+*Modern Statistical Learning for Observational Data* 
+(https://si.biostat.washington.edu/institutes/siscer/CR2408)
+
+## Books
+
+*Targeted Learning* by Mark van der Laan and Sherri Rose
+(https://link.springer.com/book/10.1007/978-1-4419-9782-1)
+
+
+---
+# Additional Resources
+
+## Websites
+
+*An Illustrated Guide to TMLE* by Katherine Hoffman
+(https://www.khstats.com/blog/tmle/tutorial)
